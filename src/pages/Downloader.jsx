@@ -1,0 +1,547 @@
+import React, { useState, useCallback } from 'react';
+import { Link, AlertCircle, Scissors, Download, Film, ClipboardPaste, Settings2, Subtitles, ShieldOff, Tag, ChevronDown } from 'lucide-react';
+import VideoPreview from '../components/VideoPreview';
+
+const FORMATS = [
+  { value: 'mp4', label: 'Video — MP4', group: 'video' },
+  { value: 'webm', label: 'Video — WEBM', group: 'video' },
+  { value: 'mp3', label: 'Audio — MP3', group: 'audio' },
+  { value: 'm4a', label: 'Audio — M4A', group: 'audio' },
+  { value: 'aac', label: 'Audio — AAC', group: 'audio' },
+  { value: 'flac', label: 'Audio — FLAC (Lossless)', group: 'audio' },
+  { value: 'wav', label: 'Audio — WAV (Lossless)', group: 'audio' },
+  { value: 'opus', label: 'Audio — Opus', group: 'audio' },
+];
+
+const QUALITIES = [
+  { value: 'best', label: 'Best Available' },
+  { value: '2160', label: '4K (2160p)' },
+  { value: '1080', label: '1080p' },
+  { value: '720', label: '720p' },
+  { value: '480', label: '480p' },
+  { value: '360', label: '360p' },
+];
+
+const SUB_LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'hi', label: 'Hindi' },
+  { value: 'es', label: 'Spanish' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'ko', label: 'Korean' },
+  { value: 'ar', label: 'Arabic' },
+  { value: 'pt', label: 'Portuguese' },
+  { value: 'ru', label: 'Russian' },
+  { value: 'zh', label: 'Chinese' },
+  { value: 'all', label: 'All Available' },
+];
+
+const SUB_FORMATS = [
+  { value: 'srt', label: 'SRT' },
+  { value: 'vtt', label: 'VTT' },
+  { value: 'ass', label: 'ASS' },
+];
+
+const SPONSORBLOCK_CATS = [
+  { value: 'sponsor', label: 'Sponsor' },
+  { value: 'intro', label: 'Intro' },
+  { value: 'outro', label: 'Outro' },
+  { value: 'selfpromo', label: 'Self-Promo' },
+  { value: 'interaction', label: 'Interaction Reminder' },
+  { value: 'music_offtopic', label: 'Non-Music Section' },
+];
+
+export default function Downloader({ onAddToQueue, onNavigate, speedLimit, cookiesBrowser }) {
+  const [url, setUrl] = useState('');
+  const [metadata, setMetadata] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [format, setFormat] = useState('mp4');
+  const [quality, setQuality] = useState('best');
+  const [embedThumbnail, setEmbedThumbnail] = useState(true);
+  const [trimOpen, setTrimOpen] = useState(false);
+  const [trimStart, setTrimStart] = useState('');
+  const [trimEnd, setTrimEnd] = useState('');
+  const [selectedVideos, setSelectedVideos] = useState([]);
+  const [selectAll, setSelectAll] = useState(true);
+
+  // Advanced options
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [embedMetadata, setEmbedMetadata] = useState(true);
+  // Subtitles
+  const [subsEnabled, setSubsEnabled] = useState(false);
+  const [subsEmbed, setSubsEmbed] = useState(true);
+  const [subsAutoGen, setSubsAutoGen] = useState(true);
+  const [subsLang, setSubsLang] = useState('en');
+  const [subsFormat, setSubsFormat] = useState('srt');
+  // SponsorBlock
+  const [sbEnabled, setSbEnabled] = useState(false);
+  const [sbAction, setSbAction] = useState('remove');
+  const [sbCats, setSbCats] = useState(['sponsor', 'intro', 'outro']);
+
+  const isAudio = ['mp3', 'm4a', 'aac', 'flac', 'wav', 'opus'].includes(format);
+
+  const fetchMetadata = useCallback(async (inputUrl) => {
+    const trimmedUrl = (inputUrl || url).trim();
+    if (!trimmedUrl) return;
+
+    setLoading(true);
+    setError('');
+    setMetadata(null);
+
+    try {
+      const result = await window.electronAPI.fetchMetadata(trimmedUrl);
+      if (result.success) {
+        setMetadata(result.data);
+        if (result.data.type === 'playlist') {
+          setSelectedVideos(result.data.entries.map((_, i) => i));
+          setSelectAll(true);
+        }
+      } else {
+        setError(result.error || 'Failed to fetch video info');
+      }
+    } catch (e) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [url]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') fetchMetadata();
+  };
+
+  const handlePaste = async (e) => {
+    if (e && e.target) {
+      setTimeout(() => {
+        const pasted = e.target.value;
+        if (pasted && (pasted.includes('youtube.com') || pasted.includes('youtu.be') || pasted.includes('http'))) {
+          fetchMetadata(pasted);
+        }
+      }, 50);
+    } else {
+      try {
+        const text = await window.electronAPI.readClipboard();
+        if (text && text.trim().startsWith('http')) {
+          setUrl(text.trim());
+          fetchMetadata(text.trim());
+        }
+      } catch (err) {
+        console.error('Failed to read clipboard', err);
+      }
+    }
+  };
+
+  // Build the advanced options object
+  const buildAdvancedOpts = () => ({
+    subtitles: subsEnabled ? {
+      enabled: true,
+      embed: subsEmbed,
+      autoGenerated: subsAutoGen,
+      language: subsLang,
+      format: subsFormat,
+    } : null,
+    sponsorblock: sbEnabled ? {
+      enabled: true,
+      action: sbAction,
+      categories: sbCats,
+    } : null,
+    embedMetadata,
+    speedLimit: speedLimit || null,
+    cookiesBrowser: cookiesBrowser || 'none',
+  });
+
+  const handleAddToQueue = async () => {
+    if (!metadata) return;
+    const advanced = buildAdvancedOpts();
+
+    if (metadata.type === 'playlist') {
+      const folder = await window.electronAPI.selectFolder();
+      if (!folder) return;
+
+      const videos = selectAll
+        ? metadata.entries
+        : metadata.entries.filter((_, i) => selectedVideos.includes(i));
+
+      videos.forEach(video => {
+        onAddToQueue({
+          url: video.url,
+          title: video.title,
+          thumbnail: video.thumbnail,
+          format,
+          quality: isAudio ? null : quality,
+          outputDir: folder,
+          embedThumbnail: format === 'mp3' ? embedThumbnail : false,
+          trimStart: trimStart || null,
+          trimEnd: trimEnd || null,
+          ...advanced,
+        });
+      });
+    } else {
+      const defaultPath = `${metadata.title}.${format}`;
+      const savePath = await window.electronAPI.selectSaveFile({ defaultPath });
+      if (!savePath) return;
+
+      onAddToQueue({
+        url: metadata.url || url.trim(),
+        title: metadata.title,
+        thumbnail: metadata.thumbnail,
+        format,
+        quality: isAudio ? null : quality,
+        outputPath: savePath,
+        embedThumbnail: format === 'mp3' ? embedThumbnail : false,
+        trimStart: trimStart || null,
+        trimEnd: trimEnd || null,
+        ...advanced,
+      });
+    }
+
+    setUrl('');
+    setMetadata(null);
+    setError('');
+    setTrimStart('');
+    setTrimEnd('');
+    if (onNavigate) onNavigate();
+  };
+
+  const toggleVideoSelection = (index) => {
+    setSelectedVideos(prev =>
+      prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+    );
+    setSelectAll(false);
+  };
+
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedVideos([]);
+      setSelectAll(false);
+    } else {
+      setSelectedVideos(metadata.entries.map((_, i) => i));
+      setSelectAll(true);
+    }
+  };
+
+  const toggleSbCat = (cat) => {
+    setSbCats(prev =>
+      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+    );
+  };
+
+  return (
+    <div>
+      <h1 className="page-title">Download a Video</h1>
+
+      {/* URL Input */}
+      <div className={`url-input-wrapper ${loading ? 'loading' : ''}`}>
+        <input
+          id="url-input"
+          className="url-input"
+          type="text"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          placeholder="Paste a video URL here..."
+          spellCheck={false}
+          autoFocus
+        />
+        <span className="url-input-icon">
+          {loading ? (
+            <div className="spinner">
+              <Link size={20} style={{ animation: 'spin 1.5s linear infinite' }} />
+            </div>
+          ) : (
+            <button className="btn-icon" onClick={() => handlePaste()} title="Paste Link from Clipboard" style={{ padding: 4 }}>
+              <ClipboardPaste size={20} />
+            </button>
+          )}
+        </span>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="error-message">
+          <AlertCircle size={18} className="text-error" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Video Preview */}
+      <VideoPreview metadata={metadata} loading={loading} />
+
+      {/* Playlist selector */}
+      {metadata?.type === 'playlist' && (
+        <div className="card mb-lg">
+          <div className="flex-between mb-md">
+            <span className="card-title" style={{ margin: 0 }}>Select Videos</span>
+            <label className="checkbox-wrapper">
+              <input type="checkbox" checked={selectAll} onChange={handleSelectAll} />
+              Select All ({metadata.entries.length})
+            </label>
+          </div>
+          <div className="playlist-selector">
+            {metadata.entries.map((video, i) => (
+              <label key={i} className="playlist-item">
+                <input
+                  type="checkbox"
+                  checked={selectedVideos.includes(i)}
+                  onChange={() => toggleVideoSelection(i)}
+                />
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {i + 1}. {video.title}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Format & Quality */}
+      {metadata && (
+        <>
+          <div className="form-row mb-md">
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Format</label>
+              <select
+                id="format-select"
+                className="form-select"
+                value={format}
+                onChange={e => setFormat(e.target.value)}
+              >
+                <optgroup label="Video">
+                  {FORMATS.filter(f => f.group === 'video').map(f => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Audio">
+                  {FORMATS.filter(f => f.group === 'audio').map(f => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+            {!isAudio && (
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Quality</label>
+                <select
+                  id="quality-select"
+                  className="form-select"
+                  value={quality}
+                  onChange={e => setQuality(e.target.value)}
+                >
+                  {QUALITIES.map(q => (
+                    <option key={q.value} value={q.value}>{q.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Embed thumbnail for MP3 */}
+          {format === 'mp3' && (
+            <label className="checkbox-wrapper mb-md">
+              <input
+                type="checkbox"
+                checked={embedThumbnail}
+                onChange={e => setEmbedThumbnail(e.target.checked)}
+              />
+              Embed thumbnail as album art
+            </label>
+          )}
+
+          {/* Trim Section */}
+          <div className={`collapsible ${trimOpen ? 'open' : ''}`}>
+            <button className="collapsible-header" onClick={() => setTrimOpen(!trimOpen)}>
+              <div className="collapsible-icon">
+                <Scissors size={18} />
+                <span>Trim / Clip</span>
+              </div>
+              <ChevronDown size={18} className="collapsible-chevron" />
+            </button>
+            <div className="collapsible-content">
+              <div className="collapsible-inner">
+                <div className="form-row">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Start Time</label>
+                    <input
+                      className="form-input"
+                      type="text"
+                      value={trimStart}
+                      onChange={e => setTrimStart(e.target.value)}
+                      placeholder="00:00:00"
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">End Time</label>
+                    <input
+                      className="form-input"
+                      type="text"
+                      value={trimEnd}
+                      onChange={e => setTrimEnd(e.target.value)}
+                      placeholder="00:05:30"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ============================================
+              Advanced Options
+              ============================================ */}
+          <div className={`collapsible ${advancedOpen ? 'open' : ''}`}>
+            <button className="collapsible-header" onClick={() => setAdvancedOpen(!advancedOpen)}>
+              <div className="collapsible-icon">
+                <Settings2 size={18} />
+                <span>Advanced Options</span>
+              </div>
+              <ChevronDown size={18} className="collapsible-chevron" />
+            </button>
+            <div className="collapsible-content">
+              <div className="collapsible-inner">
+
+                {/* --- Embed Metadata --- */}
+                <div className="adv-section">
+                  <label className="adv-toggle">
+                    <div className="adv-toggle-info">
+                      <Tag size={16} />
+                      <span className="adv-toggle-label">Embed Metadata</span>
+                    </div>
+                    <button
+                      className={`switch ${embedMetadata ? 'active' : ''}`}
+                      onClick={() => setEmbedMetadata(!embedMetadata)}
+                      type="button"
+                    >
+                      <div className="switch-knob" />
+                    </button>
+                  </label>
+                  <div className="adv-hint">
+                    Adds title, artist, album art into the file — shows up in file explorer, VLC, and music players.
+                  </div>
+                </div>
+
+                {/* --- Subtitles --- */}
+                <div className="adv-section">
+                  <label className="adv-toggle">
+                    <div className="adv-toggle-info">
+                      <Subtitles size={16} />
+                      <span className="adv-toggle-label">Subtitles</span>
+                    </div>
+                    <button
+                      className={`switch ${subsEnabled ? 'active' : ''}`}
+                      onClick={() => setSubsEnabled(!subsEnabled)}
+                      type="button"
+                    >
+                      <div className="switch-knob" />
+                    </button>
+                  </label>
+                  {subsEnabled && (
+                    <div className="adv-sub-options">
+                      <div className="form-row">
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label">Language</label>
+                          <select className="form-select" value={subsLang} onChange={e => setSubsLang(e.target.value)}>
+                            {SUB_LANGUAGES.map(l => (
+                              <option key={l.value} value={l.value}>{l.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label">Format</label>
+                          <select className="form-select" value={subsFormat} onChange={e => setSubsFormat(e.target.value)}>
+                            {SUB_FORMATS.map(f => (
+                              <option key={f.value} value={f.value}>{f.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="adv-checkboxes">
+                        <label className="checkbox-wrapper">
+                          <input type="checkbox" checked={subsEmbed} onChange={e => setSubsEmbed(e.target.checked)} />
+                          Embed into video file
+                        </label>
+                        <label className="checkbox-wrapper">
+                          <input type="checkbox" checked={subsAutoGen} onChange={e => setSubsAutoGen(e.target.checked)} />
+                          Include auto-generated subtitles
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* --- SponsorBlock --- */}
+                <div className="adv-section" style={{ borderBottom: 'none' }}>
+                  <label className="adv-toggle">
+                    <div className="adv-toggle-info">
+                      <ShieldOff size={16} />
+                      <span className="adv-toggle-label">SponsorBlock</span>
+                    </div>
+                    <button
+                      className={`switch ${sbEnabled ? 'active' : ''}`}
+                      onClick={() => setSbEnabled(!sbEnabled)}
+                      type="button"
+                    >
+                      <div className="switch-knob" />
+                    </button>
+                  </label>
+                  {sbEnabled && (
+                    <div className="adv-sub-options">
+                      <div className="form-group" style={{ marginBottom: 12 }}>
+                        <label className="form-label">Action</label>
+                        <select className="form-select" value={sbAction} onChange={e => setSbAction(e.target.value)}>
+                          <option value="remove">Remove from video</option>
+                          <option value="mark">Mark as chapters</option>
+                        </select>
+                      </div>
+                      <label className="form-label">Categories</label>
+                      <div className="adv-chip-grid">
+                        {SPONSORBLOCK_CATS.map(cat => (
+                          <button
+                            key={cat.value}
+                            className={`adv-chip ${sbCats.includes(cat.value) ? 'active' : ''}`}
+                            onClick={() => toggleSbCat(cat.value)}
+                            type="button"
+                          >
+                            {cat.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="action-bar">
+            <button
+              id="add-to-queue-btn"
+              className="btn btn-accent btn-lg"
+              onClick={handleAddToQueue}
+              disabled={!metadata}
+            >
+              <Download size={18} />
+              {metadata?.type === 'playlist'
+                ? `Save ${selectAll ? metadata.entries.length : selectedVideos.length} Videos`
+                : 'Save Video As...'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Empty state when no URL */}
+      {!metadata && !loading && !error && (
+        <div className="empty-state">
+          <div className="empty-icon"><Film size={32} /></div>
+          <div className="empty-title">Paste a video URL to get started</div>
+          <div className="empty-state-sub" style={{ maxWidth: 340, lineHeight: 1.6 }}>
+            Supports YouTube, Instagram, TikTok, Twitter/X, Vimeo, SoundCloud & 1000+ more sites
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

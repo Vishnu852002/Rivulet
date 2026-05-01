@@ -1,0 +1,40 @@
+# node
+node_modules/
+npm-debug.log*
+
+# build output
+dist/
+release/
+
+# bundled binaries (too large for git — see README)
+bin/
+
+# environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# downloaded media files
+*.mp4
+*.mp3
+*.m4a
+*.webm
+*.mkv
+*.flac
+*.wav
+
+# electron
+out/
+
+# misc
+*.log
