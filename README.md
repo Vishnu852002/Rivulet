@@ -35,7 +35,10 @@ Built with Electron, React, and the power of [yt-dlp](https://github.com/yt-dlp/
 
 ## 📸 Screenshots
 
-> *Coming soon — install and see for yourself!*
+<img width="1364" height="937" alt="image" src="https://github.com/user-attachments/assets/287c96fe-7035-4b0c-b094-15953c3214bf" />
+<img width="1372" height="946" alt="image" src="https://github.com/user-attachments/assets/9e5188d4-6c99-411c-be17-83e2ad9c7d60" />
+<img width="1368" height="933" alt="image" src="https://github.com/user-attachments/assets/b7f32cde-267f-4b68-b354-34939d7e30da" />
+
 
 ## 🛠️ Tech Stack
 
