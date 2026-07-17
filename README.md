@@ -4,7 +4,8 @@
 
 ### *A small stream carries everything you need.*
 
-A sleek, elegant desktop app for downloading videos & audio from YouTube and **1000+ other sites**.  
+Download videos & audio from **YouTube, TikTok, Instagram, Twitter/X + 1000+ more sites** without limits or browser crap. You just have to install the app and put the URL, select format and quality (have more advanced settings) and click **Save as**
+
 Built with Electron, React, and the power of [yt-dlp](https://github.com/yt-dlp/yt-dlp).
 
 [![Release](https://img.shields.io/github/v/release/Vishnu852002/Rivulet?style=for-the-badge&color=6366f1&label=Download)](https://github.com/Vishnu852002/Rivulet/releases/latest)
